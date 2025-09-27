@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quick Dial</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --fg: #e6e6e6;
+      --muted: #a3adba;
+      --card: #171a21;
+      --card-hover: #1e232c;
+      --accent: #4f8cff;
+      --shadow: 0 10px 30px rgba(0,0,0,.25);
+      --radius: 18px;
+    }
+    [data-theme="light"] {
+      --bg: #f6f7fb;
+      --fg: #1a1d24;
+      --muted: #4d5561;
+      --card: #ffffff;
+      --card-hover: #f0f3fa;
+      --accent: #2f6bff;
+      --shadow: 0 12px 28px rgba(0,0,0,.08);
+    }
+
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: var(--bg) fixed center/cover no-repeat; color: var(--fg);
+      display: grid; grid-template-rows: auto 1fr; gap: 14px;
+    }
+
+    header { display: flex; align-items: center; gap: 12px; padding: 18px 22px; }
+    header h1 { font-size: 20px; margin: 0; letter-spacing: .2px; }
+    .spacer { flex: 1; }
+
+    .toolbar { display: inline-flex; gap: 8px; }
+    .btn { appearance: none; border: 0; border-radius: 12px; padding: 10px 14px; cursor: pointer; background: var(--card); color: var(--fg); box-shadow: var(--shadow); }
+    .btn:hover { background: var(--card-hover); }
+    .btn.primary { background: var(--accent); color: white; }
+    .btn.primary:hover { filter: brightness(1.05); }
+
+    .switch { display: inline-flex; align-items: center; gap: 8px; user-select: none; }
+.switch input { appearance: none; width: 46px; height: 26px; border-radius: 999px; background: rgba(127,127,127,.35); position: relative; outline: none; cursor: pointer; transition: background .2s; }
+.switch input::after { content: ""; position: absolute; width: 20px; height: 20px; top: 3px; left: 3px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .2s; }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::after { transform: translateX(20px); }
+
+:root {
+  --tile-height: 120px; /* Total tile height */
+  --tile-width: 160px;
+  --tile-padding: 4px; /* Reduced padding to fit content tighter */
+  --tile-gap: 2px; /* Keep minimal gap */
+  --grid-gap: 16px;
+}
+
+.grid {
+  padding: 50px 18px 80px;
+  width: min(1300px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tile-width), 1fr));
+  gap: var(--grid-gap);
+  align-items: stretch;
+  grid-auto-rows: var(--tile-height);
+}
+
+.tile {
+  user-select: none;
+  -webkit-user-drag: none;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: var(--tile-padding); /* Reduced to 4px */
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-rows: minmax(32px, auto) minmax(16px, auto) minmax(11px, auto); /* Specific heights for content */
+  align-items: start; /* Align to top to reduce gaps */
+  gap: var(--tile-gap);
+  text-decoration: none;
+  color: inherit;
+  position: relative;
+  overflow: hidden;
+  outline: 2px solid transparent;
+  transition: transform .08s ease, outline-color .2s ease, background .2s ease;
+  box-sizing: border-box;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  height: 100%;
+  margin: 0;
+}
+.tile:hover { background: var(--card-hover); transform: translateY(-2px); }
+.tile:active { transform: translateY(0); }
+.tile.dragging { opacity: .6; transform: scale(.98); }
+.tile.drop-target { outline-color: var(--accent); }
+
+.favicon { width: 32px; height: 32px; border-radius: 1px; display: inline-grid; place-items: center;  margin-left: 8px; margin-top: 8px;}
+.favicon img { width: 100%; height: 100%; border-radius: 1px; object-fit: contain; }
+
+.title { font-weight: 600; font-size: 14px; line-height: 0.8; text-align: left; margin-left: 8px;margin-top: 1px;margin-bottom: 1px; }
+.host { color: var(--muted); font-size: 11px; margin-left: 8px; margin-top: 0px;margin-bottom: 5px;}
+
+    .tile .actions { position: absolute; right: 8px; top: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity .15s; }
+    .tile.actions-visible .actions { opacity: 1; }
+    .iconbtn { width: 30px; height: 30px; border-radius: 10px; border: 0; cursor: pointer; display: grid; place-items: center; background: rgba(127,127,127,.12); color: var(--fg); }
+    .iconbtn:hover { background: rgba(127,127,127,.22); }
+    .icon { width: 18px; height: 18px; display: inline-block; }
+
+    .fab { position: fixed; right: 22px; bottom: 22px; z-index: 20; border-radius: 18px; padding: 14px 16px; font-weight: 600; }
+
+    dialog { border: 0; border-radius: 16px; background: var(--card); color: var(--fg); padding: 0; box-shadow: var(--shadow); width: min(520px, 92vw); }
+    dialog::backdrop { background: rgba(0,0,0,.45); }
+    .dlg-head { padding: 18px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(127,127,127,.15); }
+    .dlg-body { padding: 18px 20px; display: grid; gap: 12px; }
+    .dlg-foot { padding: 14px 20px 18px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid rgba(127,127,127,.12); }
+
+    label { font-size: 12px; color: var(--muted); }
+    input[type="text"], input[type="url"] { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(127,127,127,.2); background: var(--bg); color: var(--fg); }
+    .row { display: grid; gap: 8px; }
+
+    .empty { opacity: .6; text-align: center; padding: 40px 20px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Quick Dial</h1>
+    <div class="spacer"></div>
+    <div class="toolbar">
+      <label class="switch" title="Toggle light/dark">
+        <input id="themeToggle" type="checkbox" />
+        <span>Light</span>
+      </label>
+      <button class="btn" id="btnExport" title="Export dials to JSON">Export</button>
+      <button class="btn" id="btnImport" title="Import dials from JSON">Import</button>
+      <input id="fileImport" type="file" accept="application/json" hidden />
+    </div>
+  </header>
+
+  <main class="grid" id="grid"></main>
+
+  <button class="btn primary fab" id="btnAdd">＋ Add Dial</button>
+
+  <dialog id="dlg">
+    <div class="dlg-head">
+      <strong id="dlgTitle">Add Dial</strong>
+      <div class="spacer"></div>
+    </div>
+    <div class="dlg-body">
+      <div class="row">
+        <label for="fUrl">URL</label>
+        <input id="fUrl" type="url" placeholder="https://example.com" required />
+      </div>
+      <div class="row">
+        <label for="fTitle">Title (optional)</label>
+        <input id="fTitle" type="text" placeholder="Shown on the tile" />
+      </div>
+      <div class="row">
+        <label for="fIcon">Icon URL (optional)</label>
+        <input id="fIcon" type="url" placeholder="https://site.com/favicon.ico" />
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" id="dlgCancel" type="button">Cancel</button>
+      <button class="btn primary" id="dlgSave" type="button">Save</button>
+    </div>
+  </dialog>
+
+  <script>
+  const LS_KEY = 'quickdial.v1.items';
+  const LS_THEME = 'quickdial.theme';
+
+  /** @type {Array<{id:string,url:string,title:string,icon:string,added:number}>} */
+  let items = [];
+  let editingId = null;
+
+  const grid = document.getElementById('grid');
+  const dlg = document.getElementById('dlg');
+  const fUrl = document.getElementById('fUrl');
+  const fTitle = document.getElementById('fTitle');
+  const fIcon = document.getElementById('fIcon');
+
+  const themeToggle = document.getElementById('themeToggle');
+  const btnAdd = document.getElementById('btnAdd');
+  const btnExport = document.getElementById('btnExport');
+  const btnImport = document.getElementById('btnImport');
+  const fileImport = document.getElementById('fileImport');
+  const dlgSave = document.getElementById('dlgSave');
+  const dlgCancel = document.getElementById('dlgCancel');
+
+  function uid() { return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+  function save() { localStorage.setItem(LS_KEY, JSON.stringify(items)); }
+  function load() { try { items = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { items = []; } }
+
+  function getHost(url) { try { return new URL(url).host; } catch { return url; } }
+  function defaultTitle(url) { const h = getHost(url); return h.replace(/^www\./,''); }
+  function guessIcon(url) { try { const u = new URL(url); return `${u.protocol}//${u.host}/favicon.ico`; } catch { return ''; } }
+  function s2Favicon(url) { try { const u = new URL(url); return `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(u.origin)}`; } catch { return ''; } }
+
+  function applyThemeFromStorage() {
+    const t = localStorage.getItem(LS_THEME) || 'light';
+    document.documentElement.setAttribute('data-theme', t);
+    themeToggle.checked = (t === 'light');
+  }
+
+  function render() {
+    grid.innerHTML = '';
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.innerHTML = 'No dials yet. Click <b>Add Dial</b> to create your first.';
+      grid.appendChild(empty);
+      return;
+    }
+    for (const it of items) grid.appendChild(renderTile(it));
+  }
+
+  function renderTile(it) {
+    const a = document.createElement('a');
+    a.className = 'tile'; a.href = it.url; // open in same tab (no target/rel)
+    a.draggable = true; a.dataset.id = it.id;
+
+    a.addEventListener('dragstart', onDragStart);
+    a.addEventListener('dragover', onDragOver);
+    a.addEventListener('dragleave', onDragLeave);
+    a.addEventListener('drop', onDrop);
+
+    const icoWrap = document.createElement('div'); icoWrap.className = 'favicon';
+    const img = document.createElement('img'); img.alt = ''; img.referrerPolicy = 'no-referrer';
+    img.src = it.icon || guessIcon(it.url);
+    img.addEventListener('error', () => { if (img.src !== s2Favicon(it.url)) img.src = s2Favicon(it.url); });
+    icoWrap.appendChild(img);
+
+    const title = document.createElement('div'); title.className = 'title'; title.textContent = it.title || defaultTitle(it.url);
+    const host = document.createElement('div'); host.className = 'host'; host.textContent = getHost(it.url);
+
+    const actions = document.createElement('div'); actions.className = 'actions';
+    const btnEdit = iconButton('✎', 'Edit'); btnEdit.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); openEdit(it.id); });
+    const btnDelete = iconButton('✕', 'Delete'); btnDelete.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); remove(it.id); });
+    actions.append(btnEdit, btnDelete);
+
+    // show actions only on right-click (context menu)
+    a.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      document.querySelectorAll('.tile.actions-visible').forEach(t => t.classList.remove('actions-visible'));
+      a.classList.add('actions-visible');
+    });
+    actions.addEventListener('click', (e) => e.stopPropagation());
+
+    a.append(icoWrap, title, host, actions);
+    return a;
+  }
+
+  function iconButton(text, title) { const b = document.createElement('button'); b.type = 'button'; b.className = 'iconbtn'; b.title = title; const span = document.createElement('span'); span.className = 'icon'; span.textContent = text; b.appendChild(span); return b; }
+
+  function openAdd() { editingId = null; document.getElementById('dlgTitle').textContent = 'Add Dial'; fUrl.value = ''; fTitle.value = ''; fIcon.value = ''; dlg.showModal(); }
+  function openEdit(id) { editingId = id; const it = items.find(x => x.id === id); if (!it) return; document.getElementById('dlgTitle').textContent = 'Edit Dial'; fUrl.value = it.url; fTitle.value = it.title || ''; fIcon.value = it.icon || ''; dlg.showModal(); }
+
+  function upsertFromForm() {
+    const url = fUrl.value.trim(); if (!/^https?:\/\//i.test(url)) { alert('Please enter a valid http(s) URL.'); return false; }
+    const title = fTitle.value.trim(); const icon = fIcon.value.trim();
+    if (editingId) { const i = items.findIndex(x => x.id === editingId); if (i >= 0) items[i] = { ...items[i], url, title, icon }; }
+    else { items.push({ id: uid(), url, title, icon, added: Date.now() }); }
+    save(); render(); return true;
+  }
+
+  function remove(id) { if (!confirm('Remove this dial?')) return; items = items.filter(x => x.id !== id); save(); render(); }
+
+  // Drag & drop reordering
+  let dragId = null;
+  function onDragStart(e) { dragId = e.currentTarget.dataset.id; e.dataTransfer.effectAllowed = 'move'; }
+  function onDragOver(e) { e.preventDefault(); const t = e.currentTarget; if (t.dataset.id === dragId) return; t.classList.add('drop-target'); e.dataTransfer.dropEffect = 'move'; }
+  function onDragLeave(e) { e.currentTarget.classList.remove('drop-target'); }
+  function onDrop(e) {
+    e.preventDefault(); const t = e.currentTarget; t.classList.remove('drop-target');
+    const toId = t.dataset.id; if (!dragId || dragId === toId) return;
+    const fromIdx = items.findIndex(x => x.id === dragId); const toIdx = items.findIndex(x => x.id === toId);
+    if (fromIdx < 0 || toIdx < 0) return; const [moved] = items.splice(fromIdx, 1); items.splice(toIdx, 0, moved);
+    save(); render();
+  }
+
+  // Import/Export
+  function exportJson() { const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'quick-dial.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  function importJson(file) {
+    const reader = new FileReader(); reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!Array.isArray(parsed)) throw new Error('Invalid format');
+        const map = new Map(items.map(x => [x.url, x]));
+        for (const p of parsed) {
+          if (!p || typeof p !== 'object' || !p.url) continue;
+          const rec = { id: p.id || uid(), url: String(p.url), title: String(p.title||''), icon: String(p.icon||''), added: Number(p.added||Date.now()) };
+          map.set(rec.url, rec);
+        }
+        items = Array.from(map.values()); save(); render();
+      } catch (err) { alert('Failed to import: ' + err.message); }
+    }; reader.readAsText(file);
+  }
+
+  // Init
+  try { items = JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { items = []; }
+  applyThemeFromStorage(); render();
+
+  // Hide any open action menus on outside click
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.tile.actions-visible').forEach(t => t.classList.remove('actions-visible'));
+  });
+
+  // Events
+  dlgSave.addEventListener('click', () => { if (upsertFromForm()) dlg.close(); });
+  dlgCancel.addEventListener('click', () => dlg.close());
+
+  btnAdd.addEventListener('click', openAdd);
+  btnExport.addEventListener('click', exportJson);
+  btnImport.addEventListener('click', () => fileImport.click());
+  fileImport.addEventListener('change', () => { const f = fileImport.files?.[0]; if (f) importJson(f); fileImport.value=''; });
+
+  themeToggle.addEventListener('change', () => { const theme = themeToggle.checked ? 'light' : 'dark'; localStorage.setItem(LS_THEME, theme); applyThemeFromStorage(); });
+
+  // Keyboard: quick Add with "n"
+  window.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'n' && !dlg.open) openAdd(); });
+
+  // Seed examples on first run
+  if (!items.length && !localStorage.getItem('quickdial.seeded')) {
+    items = [
+      { id: uid(), url: 'https://www.google.com', title: 'Google', icon: '', added: Date.now() },
+      { id: uid(), url: 'https://www.bing.com', title: 'Bing', icon: '', added: Date.now() }
+    ];
+    localStorage.setItem('quickdial.seeded', '1'); save(); render();
+  }
+  </script>
+</body>
+</html>
