@@ -17,7 +17,6 @@ Just open it in a browser or host it anywhere (GitHub Pages, local server, etc.)
   - **Custom Icon Path** — point to any image or favicon URL.
 - **Drag & Drop Reorder** — arrange tiles easily.
 - **Light & Dark themes** — toggle via a modern switch; light is default and remembered.
-- **Resizable tile grid** — change two CSS variables (`--tile-min-w` and `--tile-h`) to instantly resize all tiles.
 - **Right-click to reveal actions** — edit/delete buttons only appear on right click (prevents accidental clicks).
 - **Local storage** — all your tiles live in your browser; no server or database needed.
 - **Import / Export** — backup or move tiles between browsers/devices using a JSON file.
