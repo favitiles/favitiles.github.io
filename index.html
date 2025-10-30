@@ -221,6 +221,9 @@
 
     a.addEventListener('dragstart', onDragStart);
     a.addEventListener('dragend', onDragEnd);
+    a.addEventListener('dragenter', onTileDragEnter);
+    a.addEventListener('dragover', onTileDragOver);
+    a.addEventListener('drop', onTileDrop);
 
     const icoWrap = document.createElement('div'); icoWrap.className = 'favicon';
     const img = document.createElement('img'); img.alt = ''; img.referrerPolicy = 'no-referrer';
@@ -280,7 +283,11 @@
     dragId = null;
   }
 
-  function onGridDragOver(e) {
+  function onTileDragEnter(e) {
+    if (dragId) e.preventDefault();
+  }
+
+  function onTileDragOver(e) {
     if (!dragId) return;
     e.preventDefault();
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
@@ -288,15 +295,13 @@
     const draggingEl = grid.querySelector('.tile.dragging');
     if (!draggingEl) return;
 
-    const target = e.target.closest('.tile');
+    const target = e.currentTarget;
     if (!target || target === draggingEl) return;
 
-    const tiles = Array.from(grid.querySelectorAll('.tile'));
-    const draggingIdx = tiles.indexOf(draggingEl);
-    const targetIdx = tiles.indexOf(target);
-    if (draggingIdx < 0 || targetIdx < 0) return;
+    const rect = target.getBoundingClientRect();
+    const isBefore = (e.clientY - rect.top) < rect.height / 2;
 
-    const referenceNode = draggingIdx < targetIdx ? target.nextSibling : target;
+    const referenceNode = isBefore ? target : target.nextSibling;
     if (referenceNode === draggingEl) return;
     grid.insertBefore(draggingEl, referenceNode);
   }
@@ -315,7 +320,7 @@
     }
   }
 
-  function onGridDrop(e) {
+  function onTileDrop(e) {
     if (!dragId) return;
     e.preventDefault();
     commitDomOrder();
@@ -360,8 +365,22 @@
   themeToggle.addEventListener('change', () => { const theme = themeToggle.checked ? 'light' : 'dark'; localStorage.setItem(LS_THEME, theme); applyThemeFromStorage(); });
 
   grid.addEventListener('dragenter', (e) => { if (dragId) e.preventDefault(); });
-  grid.addEventListener('dragover', onGridDragOver);
-  grid.addEventListener('drop', onGridDrop);
+  grid.addEventListener('dragover', (e) => {
+    if (!dragId) return;
+    const draggingEl = grid.querySelector('.tile.dragging');
+    if (!draggingEl) return;
+
+    // When hovering over the empty space in the grid, append the dragged tile to the end.
+    if (!e.target.closest('.tile')) {
+      e.preventDefault();
+      grid.appendChild(draggingEl);
+    }
+  });
+  grid.addEventListener('drop', (e) => {
+    if (!dragId) return;
+    e.preventDefault();
+    commitDomOrder();
+  });
 
   // Keyboard: quick Add with "n"
   window.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'n' && !dlg.open) openAdd(); });
