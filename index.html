@@ -221,6 +221,7 @@
     a.draggable = true; a.dataset.id = it.id;
 
     a.addEventListener('dragstart', onDragStart);
+    a.addEventListener('dragend', onDragEnd);
     a.addEventListener('dragover', onDragOver);
     a.addEventListener('dragleave', onDragLeave);
     a.addEventListener('drop', onDrop);
@@ -268,8 +269,16 @@
 
   // Drag & drop reordering
   let dragId = null;
-  function onDragStart(e) { dragId = e.currentTarget.dataset.id; e.dataTransfer.effectAllowed = 'move'; }
-  function onDragOver(e) { e.preventDefault(); const t = e.currentTarget; if (t.dataset.id === dragId) return; t.classList.add('drop-target'); e.dataTransfer.dropEffect = 'move'; }
+  function onDragStart(e) {
+    dragId = e.currentTarget.dataset.id;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      // Some Chromium browsers require a data payload for drag events to work.
+      e.dataTransfer.setData('text/plain', dragId);
+    }
+    requestAnimationFrame(() => e.currentTarget.classList.add('dragging'));
+  }
+  function onDragOver(e) { e.preventDefault(); const t = e.currentTarget; if (t.dataset.id === dragId) return; t.classList.add('drop-target'); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; }
   function onDragLeave(e) { e.currentTarget.classList.remove('drop-target'); }
   function onDrop(e) {
     e.preventDefault(); const t = e.currentTarget; t.classList.remove('drop-target');
@@ -277,6 +286,11 @@
     const fromIdx = items.findIndex(x => x.id === dragId); const toIdx = items.findIndex(x => x.id === toId);
     if (fromIdx < 0 || toIdx < 0) return; const [moved] = items.splice(fromIdx, 1); items.splice(toIdx, 0, moved);
     save(); render();
+  }
+  function onDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    dragId = null;
+    document.querySelectorAll('.tile.drop-target').forEach(t => t.classList.remove('drop-target'));
   }
 
   // Import/Export
