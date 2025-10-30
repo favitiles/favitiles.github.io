@@ -93,7 +93,6 @@
 .tile:hover { background: var(--card-hover); transform: translateY(-2px); }
 .tile:active { transform: translateY(0); }
 .tile.dragging { opacity: .6; transform: scale(.98); }
-.tile.drop-target { outline-color: var(--accent); }
 
 .favicon { width: 32px; height: 32px; border-radius: 1px; display: inline-grid; place-items: center;  margin-left: 8px; margin-top: 8px;}
 .favicon img { width: 100%; height: 100%; border-radius: 1px; object-fit: contain; }
@@ -222,9 +221,6 @@
 
     a.addEventListener('dragstart', onDragStart);
     a.addEventListener('dragend', onDragEnd);
-    a.addEventListener('dragover', onDragOver);
-    a.addEventListener('dragleave', onDragLeave);
-    a.addEventListener('drop', onDrop);
 
     const icoWrap = document.createElement('div'); icoWrap.className = 'favicon';
     const img = document.createElement('img'); img.alt = ''; img.referrerPolicy = 'no-referrer';
@@ -278,19 +274,51 @@
     }
     requestAnimationFrame(() => e.currentTarget.classList.add('dragging'));
   }
-  function onDragOver(e) { e.preventDefault(); const t = e.currentTarget; if (t.dataset.id === dragId) return; t.classList.add('drop-target'); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; }
-  function onDragLeave(e) { e.currentTarget.classList.remove('drop-target'); }
-  function onDrop(e) {
-    e.preventDefault(); const t = e.currentTarget; t.classList.remove('drop-target');
-    const toId = t.dataset.id; if (!dragId || dragId === toId) return;
-    const fromIdx = items.findIndex(x => x.id === dragId); const toIdx = items.findIndex(x => x.id === toId);
-    if (fromIdx < 0 || toIdx < 0) return; const [moved] = items.splice(fromIdx, 1); items.splice(toIdx, 0, moved);
-    save(); render();
-  }
   function onDragEnd(e) {
+    if (dragId) commitDomOrder();
     e.currentTarget.classList.remove('dragging');
     dragId = null;
-    document.querySelectorAll('.tile.drop-target').forEach(t => t.classList.remove('drop-target'));
+  }
+
+  function onGridDragOver(e) {
+    if (!dragId) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+
+    const draggingEl = grid.querySelector('.tile.dragging');
+    if (!draggingEl) return;
+
+    const target = e.target.closest('.tile');
+    if (!target || target === draggingEl) return;
+
+    const tiles = Array.from(grid.querySelectorAll('.tile'));
+    const draggingIdx = tiles.indexOf(draggingEl);
+    const targetIdx = tiles.indexOf(target);
+    if (draggingIdx < 0 || targetIdx < 0) return;
+
+    const referenceNode = draggingIdx < targetIdx ? target.nextSibling : target;
+    if (referenceNode === draggingEl) return;
+    grid.insertBefore(draggingEl, referenceNode);
+  }
+
+  function commitDomOrder() {
+    const orderedIds = Array.from(grid.querySelectorAll('.tile')).map(tile => tile.dataset.id);
+    if (!orderedIds.length) return;
+    const map = new Map(items.map(item => [item.id, item]));
+    const reordered = orderedIds.map(id => map.get(id)).filter(Boolean);
+    if (reordered.length === items.length) {
+      const changed = reordered.some((item, index) => item !== items[index]);
+      if (changed) {
+        items = reordered;
+        save();
+      }
+    }
+  }
+
+  function onGridDrop(e) {
+    if (!dragId) return;
+    e.preventDefault();
+    commitDomOrder();
   }
 
   // Import/Export
@@ -330,6 +358,10 @@
   fileImport.addEventListener('change', () => { const f = fileImport.files?.[0]; if (f) importJson(f); fileImport.value=''; });
 
   themeToggle.addEventListener('change', () => { const theme = themeToggle.checked ? 'light' : 'dark'; localStorage.setItem(LS_THEME, theme); applyThemeFromStorage(); });
+
+  grid.addEventListener('dragenter', (e) => { if (dragId) e.preventDefault(); });
+  grid.addEventListener('dragover', onGridDragOver);
+  grid.addEventListener('drop', onGridDrop);
 
   // Keyboard: quick Add with "n"
   window.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'n' && !dlg.open) openAdd(); });
