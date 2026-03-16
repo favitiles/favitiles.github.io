@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Your Personal Speed Dial, Ad-Free</title>
+  <title>Speed Dial</title>
   <style>
     :root {
       --bg: #0f1115;
@@ -16,12 +16,12 @@
       --radius: 18px;
     }
     [data-theme="light"] {
-      --bg: #f6f7fb;
+      --bg: #F1F1ED;
       --fg: #1a1d24;
       --muted: #4d5561;
-      --card: #ffffff;
-      --card-hover: #f0f3fa;
-      --accent: #2f6bff;
+      --card: #FDFDFD;
+      --card-hover: #DBDBD0;
+      --accent: #E27F5C;
       --shadow: 0 12px 28px rgba(0,0,0,.08);
     }
 
@@ -116,7 +116,7 @@
 </head>
 <body>
   <header>
-    <h1>Your Personal Speed Dial, Ad-Free</h1>
+    <h1>Speed Dial</h1>
     <div class="spacer"></div>
     <div class="toolbar">
       <label class="switch" title="Toggle light/dark">
@@ -158,8 +158,253 @@
     </div>
   </dialog>
 
-  <!-- SortableJS Library (pinned version) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js" integrity="sha384-BSxuMLxX+FCbTdYec3TbXlnMGEEM2QXTFdtDaveen71o+jswm2J36+xFqp8k4VHM" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+  /*!
+   * Minimal Sortable-compatible helper for this page.
+   * Supports the subset used below: create(), destroy(),
+   * ghostClass, dragClass, handle, and onEnd.
+   */
+  (function (global) {
+    'use strict';
+
+    function isInteractiveElement(target) {
+      return Boolean(target.closest('button, input, select, textarea, label, a'));
+    }
+
+    function getDragHandle(container, target, handleSelector) {
+      if (!target || !container.contains(target)) return null;
+      if (!handleSelector) {
+        return target.closest(':scope > *');
+      }
+      const handle = target.closest(handleSelector);
+      if (!handle || handle.parentElement !== container) return null;
+      return handle;
+    }
+
+    function SortableLite(container, options) {
+      this.container = container;
+      this.options = options || {};
+      this.threshold = 6;
+      this.dragged = null;
+      this.dragPlaceholder = null;
+      this.pendingItem = null;
+      this.startX = 0;
+      this.startY = 0;
+      this.lastX = 0;
+      this.lastY = 0;
+      this.offsetX = 0;
+      this.offsetY = 0;
+      this.oldIndex = -1;
+      this.suppressClick = false;
+      this.touchMoveOptions = { capture: true, passive: false };
+
+      this.onMouseDown = this.onMouseDown.bind(this);
+      this.onMouseMove = this.onMouseMove.bind(this);
+      this.onMouseUp = this.onMouseUp.bind(this);
+      this.onTouchStart = this.onTouchStart.bind(this);
+      this.onTouchMove = this.onTouchMove.bind(this);
+      this.onTouchEnd = this.onTouchEnd.bind(this);
+      this.onClickCapture = this.onClickCapture.bind(this);
+
+      container.addEventListener('mousedown', this.onMouseDown);
+      container.addEventListener('touchstart', this.onTouchStart, { passive: true });
+      container.addEventListener('click', this.onClickCapture, true);
+    }
+
+    SortableLite.prototype.items = function () {
+      return Array.from(this.container.children);
+    };
+
+    SortableLite.prototype.onMouseDown = function (event) {
+      if (event.button !== 0) return;
+      const item = getDragHandle(this.container, event.target, this.options.handle);
+      if (!item || isInteractiveElement(event.target)) return;
+      this.beginPending(item, event.clientX, event.clientY);
+      document.addEventListener('mousemove', this.onMouseMove, true);
+      document.addEventListener('mouseup', this.onMouseUp, true);
+    };
+
+    SortableLite.prototype.onTouchStart = function (event) {
+      if (event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      const item = getDragHandle(this.container, event.target, this.options.handle);
+      if (!item || isInteractiveElement(event.target)) return;
+      this.beginPending(item, touch.clientX, touch.clientY);
+      document.addEventListener('touchmove', this.onTouchMove, this.touchMoveOptions);
+      document.addEventListener('touchend', this.onTouchEnd, true);
+      document.addEventListener('touchcancel', this.onTouchEnd, true);
+    };
+
+    SortableLite.prototype.beginPending = function (item, x, y) {
+      this.pendingItem = item;
+      this.startX = x;
+      this.startY = y;
+      this.lastX = x;
+      this.lastY = y;
+    };
+
+    SortableLite.prototype.onMouseMove = function (event) {
+      this.handleMove(event.clientX, event.clientY, event);
+    };
+
+    SortableLite.prototype.onTouchMove = function (event) {
+      if (!event.touches.length) return;
+      const touch = event.touches[0];
+      this.handleMove(touch.clientX, touch.clientY, event);
+    };
+
+    SortableLite.prototype.handleMove = function (x, y, event) {
+      if (!this.pendingItem && !this.dragged) return;
+
+      if (!this.dragged) {
+        const distance = Math.hypot(x - this.startX, y - this.startY);
+        if (distance < this.threshold) return;
+        this.startDrag(this.pendingItem, x, y);
+      }
+
+      if (event.cancelable) event.preventDefault();
+      this.lastX = x;
+      this.lastY = y;
+      this.positionDraggedItem(x, y);
+      this.movePlaceholder(x, y);
+    };
+
+    SortableLite.prototype.startDrag = function (item, x, y) {
+      const rect = item.getBoundingClientRect();
+      const placeholder = item.cloneNode(true);
+      placeholder.classList.add(this.options.ghostClass || 'sortable-ghost');
+      placeholder.style.pointerEvents = 'none';
+      placeholder.setAttribute('aria-hidden', 'true');
+
+      this.dragged = item;
+      this.dragPlaceholder = placeholder;
+      this.oldIndex = this.items().indexOf(item);
+      this.offsetX = x - rect.left;
+      this.offsetY = y - rect.top;
+      this.suppressClick = true;
+
+      item.parentNode.replaceChild(placeholder, item);
+
+      item.classList.add(this.options.dragClass || 'sortable-drag');
+      item.style.width = rect.width + 'px';
+      item.style.height = rect.height + 'px';
+      item.style.position = 'fixed';
+      item.style.left = '0';
+      item.style.top = '0';
+      item.style.margin = '0';
+      item.style.zIndex = '1000';
+      item.style.pointerEvents = 'none';
+      item.style.boxSizing = 'border-box';
+      item.style.transition = 'none';
+
+      document.body.appendChild(item);
+      this.positionDraggedItem(x, y);
+    };
+
+    SortableLite.prototype.positionDraggedItem = function (x, y) {
+      if (!this.dragged) return;
+      this.dragged.style.transform = 'translate(' + (x - this.offsetX) + 'px, ' + (y - this.offsetY) + 'px)';
+    };
+
+    SortableLite.prototype.movePlaceholder = function (x, y) {
+      if (!this.dragPlaceholder) return;
+
+      const siblings = this.items().filter(function (item) {
+        return item !== this.dragPlaceholder;
+      }, this);
+
+      for (let i = 0; i < siblings.length; i += 1) {
+        const sibling = siblings[i];
+        const rect = sibling.getBoundingClientRect();
+        const beforeByRow = y < rect.top + rect.height / 2;
+        const withinRow = y >= rect.top && y <= rect.bottom;
+        const beforeByColumn = withinRow && x < rect.left + rect.width / 2;
+        if (beforeByRow || beforeByColumn) {
+          if (this.dragPlaceholder !== sibling.previousElementSibling) {
+            this.container.insertBefore(this.dragPlaceholder, sibling);
+          }
+          return;
+        }
+      }
+
+      this.container.appendChild(this.dragPlaceholder);
+    };
+
+    SortableLite.prototype.onMouseUp = function () {
+      this.finishDrag();
+    };
+
+    SortableLite.prototype.onTouchEnd = function () {
+      this.finishDrag();
+    };
+
+    SortableLite.prototype.finishDrag = function () {
+      document.removeEventListener('mousemove', this.onMouseMove, true);
+      document.removeEventListener('mouseup', this.onMouseUp, true);
+      document.removeEventListener('touchmove', this.onTouchMove, this.touchMoveOptions);
+      document.removeEventListener('touchend', this.onTouchEnd, true);
+      document.removeEventListener('touchcancel', this.onTouchEnd, true);
+
+      if (!this.dragged || !this.dragPlaceholder) {
+        this.pendingItem = null;
+        return;
+      }
+
+      const dragged = this.dragged;
+      const placeholder = this.dragPlaceholder;
+      const newIndex = this.items().indexOf(placeholder);
+
+      dragged.classList.remove(this.options.dragClass || 'sortable-drag');
+      dragged.style.width = '';
+      dragged.style.height = '';
+      dragged.style.position = '';
+      dragged.style.left = '';
+      dragged.style.top = '';
+      dragged.style.margin = '';
+      dragged.style.zIndex = '';
+      dragged.style.pointerEvents = '';
+      dragged.style.boxSizing = '';
+      dragged.style.transition = '';
+      dragged.style.transform = '';
+
+      this.container.replaceChild(dragged, placeholder);
+
+      this.dragged = null;
+      this.dragPlaceholder = null;
+      this.pendingItem = null;
+
+      if (typeof this.options.onEnd === 'function') {
+        this.options.onEnd({
+          item: dragged,
+          oldIndex: this.oldIndex,
+          newIndex: newIndex
+        });
+      }
+    };
+
+    SortableLite.prototype.onClickCapture = function (event) {
+      if (!this.suppressClick) return;
+      if (this.container.contains(event.target)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      this.suppressClick = false;
+    };
+
+    SortableLite.prototype.destroy = function () {
+      this.finishDrag();
+      this.container.removeEventListener('mousedown', this.onMouseDown);
+      this.container.removeEventListener('touchstart', this.onTouchStart, { passive: true });
+      this.container.removeEventListener('click', this.onClickCapture, true);
+    };
+
+    global.Sortable = {
+      create: function (container, options) {
+        return new SortableLite(container, options);
+      }
+    };
+  }(window));
+  </script>
 
   <script>
   const LS_KEY = 'quickdial.v1.items';
