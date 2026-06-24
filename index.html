@@ -434,6 +434,66 @@
   function guessIcon(url) { try { const u = new URL(url); return `${u.protocol}//${u.host}/favicon.ico`; } catch { return ''; } }
   function s2Favicon(url) { try { const u = new URL(url); return `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(u.origin)}`; } catch { return ''; } }
 
+  function readBlobAsDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function fetchIconData(url) {
+    if (!url) return '';
+    const response = await fetch(url, { cache: 'force-cache', referrerPolicy: 'no-referrer' });
+    if (!response.ok) throw new Error('Icon request failed');
+    const blob = await response.blob();
+    if ((blob.type && !blob.type.startsWith('image/')) || blob.size > 100 * 1024) throw new Error('Icon is not a small image');
+    return readBlobAsDataUrl(blob);
+  }
+
+  async function cacheIconForItem(item) {
+    const candidates = [item.icon, guessIcon(item.url), s2Favicon(item.url)].filter(Boolean);
+    const uniqueCandidates = Array.from(new Set(candidates));
+    for (const iconUrl of uniqueCandidates) {
+      try {
+        const iconData = await fetchIconData(iconUrl);
+        if (iconData) {
+          item.iconData = iconData;
+          item.iconCachedFrom = iconUrl;
+          item.iconCachedAt = Date.now();
+          return true;
+        }
+      } catch {
+        // Try the next source. Some sites block direct favicon downloads with CORS.
+      }
+    }
+    return false;
+  }
+
+  function shouldRefreshIconCache(item, url, icon) {
+    return !item.iconData || item.url !== url || (item.icon || '') !== icon;
+  }
+
+  function saveAfterIconCache() {
+    try {
+      save();
+    } catch (err) {
+      console.warn('Icon cache could not be saved. Local storage may be full.', err);
+    }
+  }
+
+  async function cacheMissingIcons() {
+    const missing = items.filter(item => item.url && !item.iconData);
+    for (const item of missing) {
+      const changed = await cacheIconForItem(item);
+      if (changed) {
+        saveAfterIconCache();
+        render();
+      }
+    }
+  }
+
   function applyThemeFromStorage() {
     const t = localStorage.getItem(LS_THEME) || 'light';
     document.documentElement.setAttribute('data-theme', t);
@@ -470,7 +530,7 @@
     const img = document.createElement('img');
     img.alt = '';
     img.referrerPolicy = 'no-referrer';
-    img.src = it.icon || guessIcon(it.url);
+    img.src = it.iconData || it.icon || guessIcon(it.url);
     img.addEventListener('error', () => {
       if (img.src !== s2Favicon(it.url)) img.src = s2Favicon(it.url);
     });
@@ -577,7 +637,7 @@
     dlg.showModal();
   }
 
-  function upsertFromForm() {
+  async function upsertFromForm() {
     const url = fUrl.value.trim();
     if (!/^https?:\/\//i.test(url)) {
       alert('Please enter a valid http(s) URL.');
@@ -585,12 +645,28 @@
     }
     const title = fTitle.value.trim();
     const icon = fIcon.value.trim();
+    let item;
     if (editingId) {
       const i = items.findIndex(x => x.id === editingId);
-      if (i >= 0) items[i] = { ...items[i], url, title, icon };
+      if (i >= 0) {
+        const existing = items[i];
+        const refreshIcon = shouldRefreshIconCache(existing, url, icon);
+        item = {
+          ...existing,
+          url,
+          title,
+          icon,
+          iconData: refreshIcon ? '' : existing.iconData,
+          iconCachedFrom: refreshIcon ? '' : existing.iconCachedFrom,
+          iconCachedAt: refreshIcon ? 0 : existing.iconCachedAt
+        };
+        items[i] = item;
+      }
     } else {
-      items.push({ id: uid(), url, title, icon, added: Date.now() });
+      item = { id: uid(), url, title, icon, iconData: '', iconCachedFrom: '', iconCachedAt: 0, added: Date.now() };
+      items.push(item);
     }
+    if (item) await cacheIconForItem(item);
     save();
     render();
     return true;
@@ -627,6 +703,9 @@
             url: String(p.url),
             title: String(p.title || ''),
             icon: String(p.icon || ''),
+            iconData: String(p.iconData || ''),
+            iconCachedFrom: String(p.iconCachedFrom || ''),
+            iconCachedAt: Number(p.iconCachedAt || 0),
             added: Number(p.added || Date.now())
           };
           map.set(rec.url, rec);
@@ -656,8 +735,16 @@
   });
 
   // Event listeners
-  dlgSave.addEventListener('click', () => {
-    if (upsertFromForm()) dlg.close();
+  dlgSave.addEventListener('click', async () => {
+    dlgSave.disabled = true;
+    const oldText = dlgSave.textContent;
+    dlgSave.textContent = 'Saving...';
+    try {
+      if (await upsertFromForm()) dlg.close();
+    } finally {
+      dlgSave.disabled = false;
+      dlgSave.textContent = oldText;
+    }
   });
   dlgCancel.addEventListener('click', () => dlg.close());
 
@@ -684,13 +771,14 @@
   // Seed examples on first run
   if (!items.length && !localStorage.getItem('quickdial.seeded')) {
     items = [
-      { id: uid(), url: 'https://www.google.com', title: 'Google', icon: '', added: Date.now() },
-      { id: uid(), url: 'https://www.bing.com', title: 'Bing', icon: '', added: Date.now() }
+      { id: uid(), url: 'https://www.google.com', title: 'Google', icon: '', iconData: '', iconCachedFrom: '', iconCachedAt: 0, added: Date.now() },
+      { id: uid(), url: 'https://www.bing.com', title: 'Bing', icon: '', iconData: '', iconCachedFrom: '', iconCachedAt: 0, added: Date.now() }
     ];
     localStorage.setItem('quickdial.seeded', '1');
     save();
     render();
   }
+  cacheMissingIcons();
   </script>
 </body>
 </html>
