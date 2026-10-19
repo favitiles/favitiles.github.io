@@ -141,7 +141,7 @@
     <div class="dlg-body">
       <div class="row">
         <label for="fUrl">URL</label>
-        <input id="fUrl" type="url" placeholder="https://example.com" required />
+        <input id="fUrl" type="url" placeholder="https://example.com or file:///D:/folder/page.html" required />
       </div>
       <div class="row">
         <label for="fTitle">Title (optional)</label>
@@ -150,6 +150,9 @@
       <div class="row">
         <label for="fIcon">Icon URL (optional)</label>
         <input id="fIcon" type="url" placeholder="https://site.com/favicon.ico" />
+        <label for="fIconHtml">Use embedded icon from HTML (optional)</label>
+        <input id="fIconHtml" type="file" accept=".html,.htm,text/html" />
+        <small id="fIconStatus" role="status"></small>
       </div>
     </div>
     <div class="dlg-foot">
@@ -419,6 +422,27 @@
   const fUrl = document.getElementById('fUrl');
   const fTitle = document.getElementById('fTitle');
   const fIcon = document.getElementById('fIcon');
+  const fIconHtml = document.getElementById('fIconHtml');
+  const fIconStatus = document.getElementById('fIconStatus');
+  fIconHtml.addEventListener('change', async () => {
+    const file = fIconHtml.files[0];
+    if (!file) return;
+    try {
+      const doc = new DOMParser().parseFromString(await file.text(), 'text/html');
+      const icon = Array.from(doc.querySelectorAll('link[rel][href]')).find(link =>
+        link.getAttribute('rel').toLowerCase().split(/\s+/).includes('icon') &&
+        /^data:image\//i.test(link.getAttribute('href')));
+      if (!icon) throw new Error('No embedded image favicon found in this HTML file.');
+      const iconUrl = icon.getAttribute('href');
+      await fetchIconData(iconUrl);
+      fIcon.value = iconUrl;
+      fIconStatus.textContent = 'Embedded favicon loaded. Click Save to use it.';
+    } catch (err) {
+      fIconStatus.textContent = err.message;
+    } finally {
+      fIconHtml.value = '';
+    }
+  });
   const themeToggle = document.getElementById('themeToggle');
   const btnAdd = document.getElementById('btnAdd');
   const btnExport = document.getElementById('btnExport');
@@ -429,10 +453,19 @@
 
   function uid() { return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
   function save() { localStorage.setItem(LS_KEY, JSON.stringify(items)); }
-  function getHost(url) { try { return new URL(url).host; } catch { return url; } }
+  function isSupportedUrl(url) {
+    try { return ['http:', 'https:', 'file:'].includes(new URL(url).protocol); }
+    catch { return false; }
+  }
+  function getHost(url) {
+    try {
+      const u = new URL(url);
+      return u.protocol === 'file:' ? decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '') : u.host;
+    } catch { return url; }
+  }
   function defaultTitle(url) { const h = getHost(url); return h.replace(/^www\./,''); }
-  function guessIcon(url) { try { const u = new URL(url); return `${u.protocol}//${u.host}/favicon.ico`; } catch { return ''; } }
-  function s2Favicon(url) { try { const u = new URL(url); return `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(u.origin)}`; } catch { return ''; } }
+  function guessIcon(url) { try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? `${u.protocol}//${u.host}/favicon.ico` : ''; } catch { return ''; } }
+  function s2Favicon(url) { try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(u.origin)}` : ''; } catch { return ''; } }
 
   function readBlobAsDataUrl(blob) {
     return new Promise((resolve, reject) => {
@@ -530,9 +563,11 @@
     const img = document.createElement('img');
     img.alt = '';
     img.referrerPolicy = 'no-referrer';
-    img.src = it.iconData || it.icon || guessIcon(it.url);
+    const iconSource = it.iconData || it.icon || guessIcon(it.url);
+    if (iconSource) img.src = iconSource;
     img.addEventListener('error', () => {
-      if (img.src !== s2Favicon(it.url)) img.src = s2Favicon(it.url);
+      const fallback = s2Favicon(it.url);
+      if (fallback && img.src !== fallback) img.src = fallback;
     });
     icoWrap.appendChild(img);
 
@@ -623,6 +658,7 @@
     fUrl.value = '';
     fTitle.value = '';
     fIcon.value = '';
+    fIconStatus.textContent = '';
     dlg.showModal();
   }
 
@@ -634,13 +670,14 @@
     fUrl.value = it.url;
     fTitle.value = it.title || '';
     fIcon.value = it.icon || '';
+    fIconStatus.textContent = '';
     dlg.showModal();
   }
 
   async function upsertFromForm() {
     const url = fUrl.value.trim();
-    if (!/^https?:\/\//i.test(url)) {
-      alert('Please enter a valid http(s) URL.');
+    if (!isSupportedUrl(url)) {
+      alert('Please enter a valid http(s) or file:/// URL.');
       return false;
     }
     const title = fTitle.value.trim();
