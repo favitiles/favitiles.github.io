@@ -32,11 +32,29 @@
       display: grid; grid-template-rows: auto 1fr; gap: 14px;
     }
 
-    header { display: flex; align-items: center; gap: 12px; padding: 18px 22px; }
-    header h1 { font-size: 20px; margin: 0; letter-spacing: .2px; }
-    .spacer { flex: 1; }
+    header {
+      display: grid;
+      grid-template-columns: 1fr minmax(auto, 660px) 1fr;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 22px;
+      box-sizing: border-box;
+    }
+    header h1 {
+      font-size: 20px;
+      margin: 0;
+      letter-spacing: .2px;
+      white-space: nowrap;
+      justify-self: start;
+    }
+    .spacer { display: none; }
 
-    .toolbar { display: inline-flex; gap: 8px; }
+    .toolbar {
+      display: inline-flex;
+      gap: 8px;
+      justify-self: end;
+      white-space: nowrap;
+    }
     .btn { appearance: none; border: 0; border-radius: 12px; padding: 10px 14px; cursor: pointer; background: var(--card); color: var(--fg); box-shadow: var(--shadow); }
     .btn:hover { background: var(--card-hover); }
     .btn.primary { background: var(--accent); color: white; }
@@ -47,6 +65,98 @@
     .switch input::after { content: ""; position: absolute; width: 20px; height: 20px; top: 3px; left: 3px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .2s; }
     .switch input:checked { background: var(--accent); }
     .switch input:checked::after { transform: translateX(20px); }
+
+    .search-box {
+      width: 100%;
+      max-width: 660px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      background: var(--card);
+      border-radius: 12px;
+      border: 1px solid rgba(127,127,127,.22);
+      box-shadow: var(--shadow);
+      padding: 0 12px;
+      box-sizing: border-box;
+      justify-self: center;
+      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+
+    @media (max-width: 800px) {
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .toolbar {
+        margin-left: auto;
+      }
+      .search-box {
+        order: 3;
+        max-width: 100%;
+      }
+    }
+
+    .search-box:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.2), var(--shadow);
+    }
+
+    [data-theme="light"] .search-box:focus-within {
+      box-shadow: 0 0 0 3px rgba(226, 127, 92, 0.2), var(--shadow);
+    }
+
+    .search-icon {
+      flex-shrink: 0;
+      color: var(--muted);
+      margin-right: 8px;
+      pointer-events: none;
+    }
+
+    .search-input {
+      flex: 1;
+      height: 100%;
+      border: 0 !important;
+      outline: none !important;
+      background: transparent !important;
+      color: var(--fg) !important;
+      font-size: 16px;
+      font-family: inherit;
+      padding: 0 !important;
+      min-width: 0;
+    }
+
+    .search-input::placeholder {
+      color: var(--muted);
+      opacity: 0.8;
+    }
+
+    .search-input::-webkit-search-cancel-button,
+    .search-input::-webkit-search-decoration {
+      display: none;
+    }
+
+    .search-clear-btn {
+      appearance: none;
+      border: 0;
+      background: rgba(127,127,127,.18);
+      color: var(--fg);
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      cursor: pointer;
+      margin-left: 6px;
+      padding: 0;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .search-clear-btn:hover {
+      background: rgba(127,127,127,.32);
+    }
 
     .grid {
       padding: 50px 18px 80px;
@@ -117,7 +227,14 @@
 <body>
   <header>
     <h1>Speed Dial</h1>
-    <div class="spacer"></div>
+    <form class="search-box" id="searchForm" action="https://www.google.com/search" method="get">
+      <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input id="searchInput" name="q" class="search-input" type="search" placeholder="Search Google..." autocomplete="off" spellcheck="false" aria-label="Search Google" />
+      <button id="searchClear" class="search-clear-btn" type="button" title="Clear search" aria-label="Clear search" hidden>✕</button>
+    </form>
     <div class="toolbar">
       <label class="switch" title="Toggle light/dark">
         <input id="themeToggle" type="checkbox" />
@@ -418,6 +535,9 @@
   let sortableInstance = null;
 
   const grid = document.getElementById('grid');
+  const searchForm = document.getElementById('searchForm');
+  const searchInput = document.getElementById('searchInput');
+  const searchClear = document.getElementById('searchClear');
   const dlg = document.getElementById('dlg');
   const fUrl = document.getElementById('fUrl');
   const fTitle = document.getElementById('fTitle');
@@ -794,6 +914,42 @@
     fileImport.value = '';
   });
 
+  searchInput.addEventListener('input', () => {
+    searchClear.hidden = (searchInput.value.trim() === '');
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (searchInput.value) {
+        searchInput.value = '';
+        searchClear.hidden = true;
+      } else {
+        searchInput.blur();
+      }
+    }
+  });
+
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    searchClear.hidden = true;
+    searchInput.focus();
+  });
+
+  searchForm.addEventListener('submit', (e) => {
+    const q = (searchInput.value || '').trim();
+    if (!q) {
+      e.preventDefault();
+      return;
+    }
+    if (/^https?:\/\//i.test(q)) {
+      e.preventDefault();
+      window.location.href = q;
+    } else if (/^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}(:\d+)?(\/.*)?$/i.test(q)) {
+      e.preventDefault();
+      window.location.href = 'https://' + q;
+    }
+  });
+
   themeToggle.addEventListener('change', () => {
     const theme = themeToggle.checked ? 'light' : 'dark';
     localStorage.setItem(LS_THEME, theme);
@@ -802,7 +958,11 @@
 
   // Keyboard shortcut
   window.addEventListener('keydown', (e) => {
-    if (e.key.toLowerCase() === 'n' && !dlg.open) openAdd();
+    if (e.target instanceof Element && e.target.closest('input, textarea, select')) return;
+    if (e.key.toLowerCase() === 'n' && !dlg.open) {
+      e.preventDefault();
+      openAdd();
+    }
   });
 
   // Seed examples on first run
